@@ -3,9 +3,10 @@ import { BrowserClient } from '@sentry/browser';
 import { getMainCarrier, Hub } from '@sentry/hub';
 import * as hubModule from '@sentry/hub';
 import * as utilsModule from '@sentry/utils'; // for mocking
-import { getGlobalObject, isNodeEnv, logger } from '@sentry/utils';
+import { base64ToUnicode, getGlobalObject, isNodeEnv, logger } from '@sentry/utils';
 import * as nodeHttpModule from 'http';
 
+import { Transaction } from '../src';
 import { BrowserTracing } from '../src/browser/browsertracing';
 import { addExtensionMethods } from '../src/hubextensions';
 import { extractTraceparentData, TRACEPARENT_REGEXP } from '../src/utils';
@@ -29,6 +30,43 @@ describe('Hub', () => {
   afterEach(() => {
     jest.restoreAllMocks();
     jest.useRealTimers();
+  });
+
+  describe('transaction creation', () => {
+    it('uses inherited values when given in transaction context', () => {
+      const transactionContext = {
+        name: 'dogpark',
+        traceId: '12312012123120121231201212312012',
+        parentSpanId: '1121201211212012',
+        tracestate: 'doGsaREgReaT==',
+      };
+      const hub = new Hub(new BrowserClient({ tracesSampleRate: 1 }));
+      const transaction = hub.startTransaction(transactionContext);
+
+      expect(transaction).toEqual(expect.objectContaining(transactionContext));
+    });
+
+    it('creates a new tracestate value (with the right data) if not given one in transaction context', () => {
+      const hub = new Hub(
+        new BrowserClient({
+          dsn: 'https://dogsarebadatkeepingsecrets@squirrelchasers.ingest.sentry.io/12312012',
+          release: 'off.leash.park',
+          environment: 'dogpark',
+        }),
+      );
+      const transaction = hub.startTransaction({ name: 'FETCH /ball' });
+
+      const b64Value =
+        'eyJwdWJsaWNfa2V5IjoiZG9nc2FyZWJhZGF0a2VlcGluZ3NlY3JldHMiLCJlbnZpcm9ubWVudCI6ImRvZ3BhcmsiLCJyZWxlYXNlI' +
+        'joib2ZmLmxlYXNoLnBhcmsifQ.';
+
+      expect(transaction.tracestate).toEqual(b64Value);
+      expect(JSON.parse(base64ToUnicode(b64Value.replace('.', '=')))).toEqual({
+        environment: 'dogpark',
+        public_key: 'dogsarebadatkeepingsecrets',
+        release: 'off.leash.park',
+      });
+    });
   });
 
   describe('getTransaction()', () => {
