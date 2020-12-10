@@ -1,6 +1,6 @@
 import { getCurrentHub, Hub } from '@sentry/hub';
 import { Event, Measurements, Transaction as TransactionInterface, TransactionContext } from '@sentry/types';
-import { isInstanceOf, logger, unicodeToBase64 } from '@sentry/utils';
+import { computeTracestate, isInstanceOf, logger } from '@sentry/utils';
 
 import { Span as SpanClass, SpanRecorder } from './span';
 
@@ -143,26 +143,6 @@ export class Transaction extends SpanClass implements TransactionInterface {
 
     const { environment, release } = client.getOptions() || {};
 
-    const dataStr = JSON.stringify({
-      trace_id: this.traceId,
-      public_key: dsn.user,
-      environment: environment || 'no environment specified',
-      release: release || 'no release specified',
-    });
-
-    // See https://www.w3.org/TR/trace-context/#tracestate-header-field-values
-    // The spec for tracestate header values calls for a string of the form
-    //
-    //    identifier1=value1,identifier2=value2,...
-    //
-    // which means the value can't include any equals signs, since they already have meaning. Equals signs are commonly
-    // used to pad the end of base64 values though, so to avoid confusion, we strip them off. (Most languages' base64
-    // decoding functions (including those in JS) are able to function without the padding.)
-    try {
-      return unicodeToBase64(dataStr).replace(/={1,2}$/, '');
-    } catch (err) {
-      logger.warn(err);
-      return '';
-    }
+    return computeTracestate({ trace_id: this.traceId, environment, release, public_key: dsn.user });
   }
 }

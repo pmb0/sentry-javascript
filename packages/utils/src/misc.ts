@@ -2,7 +2,8 @@
 import { Event, StackFrame, WrappedFunction } from '@sentry/types';
 
 import { getGlobalObject } from './compat';
-import { snipLine } from './string';
+import { SentryError } from './error';
+import { snipLine, unicodeToBase64 } from './string';
 
 /**
  * Extended Window interface that allows for Crypto API usage in IE browsers
@@ -289,4 +290,34 @@ export function addContextToFrame(lines: string[], frame: StackFrame, linesOfCon
 export function stripUrlQueryAndFragment(urlPath: string): string {
   // eslint-disable-next-line no-useless-escape
   return urlPath.split(/[\?#]/, 1)[0];
+}
+
+/**
+ * Compute the value of a tracestate header
+ *
+ * @throws SentryError (because using the logger creates a circular dependency)
+ * @returns the base64-encoded header value
+ */
+export function computeTracestate(tracestateData: {
+  trace_id: string;
+  environment: string | undefined;
+  release: string | undefined;
+  public_key: string;
+}): string {
+  tracestateData.environment = tracestateData.environment || '';
+  tracestateData.release = tracestateData.release || '';
+
+  // See https://www.w3.org/TR/trace-context/#tracestate-header-field-values
+  // The spec for tracestate header values calls for a string of the form
+  //
+  //    identifier1=value1,identifier2=value2,...
+  //
+  // which means the value can't include any equals signs, since they already have meaning. Equals signs are commonly
+  // used to pad the end of base64 values though, so to avoid confusion, we strip them off. (Most languages' base64
+  // decoding functions (including those in JS) are able to function without the padding.)
+  try {
+    return unicodeToBase64(JSON.stringify(tracestateData)).replace(/={1,2}$/, '');
+  } catch (err) {
+    throw new SentryError(`[Tracing] Error creating tracestate header: ${err}`);
+  }
 }
