@@ -52,7 +52,6 @@ export function transactionToSentryRequest(event: Event, api: API): SentryReques
   const envelopeHeaders = JSON.stringify({
     event_id: event.event_id,
     sent_at: new Date().toISOString(),
-    trace_id: event.contexts?.trace?.trace_id,
     trace: tracestate, // trace context for dynamic sampling on relay
   });
 
