@@ -155,10 +155,10 @@ export class Transaction extends SpanClass implements TransactionInterface {
     //    identifier1=value1,identifier2=value2,...
     //
     // which means the value can't include any equals signs, since they already have meaning. Equals signs are commonly
-    // used to pad the end of base64 values though, so we have to make a substitution (periods are legal in the header
-    // but not used in base64).
+    // used to pad the end of base64 values though, so to avoid confusion, we strip them off. (Most languages' base64
+    // decoding functions (including those in JS) are able to function without the padding.)
     try {
-      return unicodeToBase64(dataStr).replace(/={1,2}$/, '.');
+      return unicodeToBase64(dataStr).replace(/={1,2}$/, '');
     } catch (err) {
       logger.warn(err);
       return '';

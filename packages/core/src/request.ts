@@ -37,22 +37,23 @@ export function transactionToSentryRequest(event: Event, api: API): SentryReques
   const { __sentry_samplingMethod: samplingMethod, __sentry_sampleRate: sampleRate, ...otherTags } = event.tags || {};
   event.tags = otherTags;
 
-  // because we send event.tracestate as a header whose values have meaningful equals signs, when we create it we have
-  // to replace the padding character with something else; the `.replace` call here reverses that to make it valid
-  // base64 before converting to unicode for parsing
-  let tracestateJSON;
-  try {
-    tracestateJSON = event.tracestate ? base64ToUnicode(event.tracestate.replace('.', '=')) : undefined;
-  } catch (err) {
-    logger.warn(err);
-    tracestateJSON = '';
+  let tracestate = {};
+  if (event.tracestate) {
+    try {
+      // the tracestate is stored in bas64-encoded JSON, but envelope header values are expected to be full JS values,
+      // so we have to decode and reinflate it
+      tracestate = JSON.parse(base64ToUnicode(event.tracestate));
+    } catch (err) {
+      logger.warn(err);
+    }
   }
   delete event.tracestate;
 
   const envelopeHeaders = JSON.stringify({
     event_id: event.event_id,
     sent_at: new Date().toISOString(),
-    trace: tracestateJSON, // trace context for dynamic sampling on relay
+    trace_id: event.contexts?.trace?.trace_id,
+    trace: tracestate, // trace context for dynamic sampling on relay
   });
 
   const itemHeaders = JSON.stringify({
