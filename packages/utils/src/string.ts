@@ -108,109 +108,94 @@ export function isMatchingPattern(value: string, pattern: RegExp | string): bool
   return false;
 }
 
-// TODO: Base64 crossed with different character encodings turns out to be a ridiculous can of worms. Base64 expects
-// 8-bit data. JS only uses UTF-16. We need a way to be sure that every SDK is speaking the same language and can decode
-// values base64-encoded by other SDKs. The current proposal is to use UTF-8 as the common standard, and then
-// base64-encode that (meaning in JS we need to get there first). Doing it that way makes a whole lot of sense but is a
-// work in progress which isn't yet actually working. Leaving the current solution for now and will come back to it.
-
 /**
- * Convert a Unicode string to a string in which each 16-bit unit occupies only one byte, which makes it safe to use as
- * input to `btoa`.
+ * Convert a Unicode string to a base64 string.
  *
- * Copied from https://developer.mozilla.org/en-US/docs/Web/API/WindowOrWorkerGlobalScope/btoa#Unicode_strings.
- *
- * @param unicodeString The string to convert
- * @returns A btoa-compatible encoding of the string
- */
-function unicodeToBinary(unicodeString: string): string {
-  const codeUnits = new Uint16Array(unicodeString.length);
-  for (let i = 0; i < codeUnits.length; i++) {
-    codeUnits[i] = unicodeString.charCodeAt(i);
-  }
-  return String.fromCharCode(...new Uint8Array(codeUnits.buffer));
-}
-
-/**
- * Convert a binary string (such as one would get from `atob`) into a Unicode string.
- *
- * Copied from https://developer.mozilla.org/en-US/docs/Web/API/WindowOrWorkerGlobalScope/btoa#Unicode_strings.
- *
- * @param binaryString The string to convert
- * @returns A btoa-compatible encoding of the string
- */
-function binaryToUnicode(binaryString: string): string {
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return String.fromCharCode(...new Uint16Array(bytes.buffer));
-}
-
-/**
- * Convert a base64 string to a Unicode (UTF-16) string.
- *
- * @param base64String The string to decode.
- * @throws SentryError (because using the logger creates a circular dependency)
- * @returns A Unicode string
- */
-export function base64ToUnicode(base64String: string): string {
-  if (typeof base64String !== 'string' || !BASE64_REGEX.test(base64String)) {
-    throw new SentryError(`Unable to convert from base64. Input either isn't a string or isn't valid base64.`);
-  }
-
-  const errMsg = `Unable to convert string from base64: ${
-    base64String.length > 256 ? `${base64String.slice(0, 256)}...` : base64String
-  }`;
-
-  try {
-    // browsers have atob built in
-    if ('atob' in getGlobalObject()) {
-      // atob takes base64 (written in (a)scii) to (b)inary
-      return binaryToUnicode(atob(base64String));
-    }
-
-    // Buffer only exists in node
-    if ('Buffer' in getGlobalObject()) {
-      return Buffer.from(base64String, 'base64').toString('utf16le');
-    }
-  } catch (err) {
-    throw new SentryError(`${errMsg} Got error: ${err}`);
-  }
-
-  throw new SentryError(errMsg);
-}
-
-/**
- * Convert a Unicode (UTF-16) string to a base64 string.
- *
- * @param unicodeString The string to encode
+ * @param unicodeString The string to base64-encode
  * @throws SentryError (because using the logger creates a circular dependency)
  * @returns A base64-encoded version of the string
  */
 export function unicodeToBase64(unicodeString: string): string {
-  if (typeof unicodeString !== 'string') {
-    throw new SentryError(`Unable to convert to base64. Input isn't a string.`);
-  }
+  const globalObject = getGlobalObject();
 
-  const errMsg = `Unable to convert string to base64: ${
-    unicodeString.length > 256 ? `${unicodeString.slice(0, 256)}...` : unicodeString
+  // Cast to a string just in case we're given something else
+  const stringifiedInput = String(unicodeString);
+  const errMsg = `Unable to convert to base64: ${
+    stringifiedInput.length > 256 ? `${stringifiedInput.slice(0, 256)}...` : stringifiedInput
   }`;
 
+  // To account for the fact that different platforms use different character encodings natively, our `tracestate`
+  // spec calls for all jsonified data to be encoded in UTF-8 bytes before being passed to the base64 encoder.
   try {
-    // browsers have btoa built in
-    if ('btoa' in getGlobalObject()) {
-      // btoa takes (b)inary to base64 (written in (a)scii)
-      return btoa(unicodeToBinary(unicodeString));
+    // browser
+    if ('btoa' in globalObject) {
+      // encode using UTF-8
+      const bytes = new TextEncoder().encode(unicodeString);
+
+      // decode using UTF-16 (JS's native encoding) since `btoa` requires string input
+      const bytesAsString = String.fromCharCode(...bytes);
+
+      return btoa(bytesAsString);
     }
 
-    // Buffer only exists in node
-    if ('Buffer' in getGlobalObject()) {
-      return Buffer.from(unicodeString, 'utf16le').toString('base64');
+    // Node
+    if ('Buffer' in globalObject) {
+      // encode using UTF-8
+      const bytes = Buffer.from(unicodeString, 'utf-8');
+
+      // unlike the browser, Node can go straight from bytes to base64
+      return bytes.toString('base64');
     }
   } catch (err) {
     throw new SentryError(`${errMsg} Got error: ${err}`);
   }
 
+  // we shouldn't ever get here, because one of `btoa` and `Buffer` should exist, but just in case...
+  throw new SentryError(errMsg);
+}
+
+/**
+ * Convert a base64 string to a Unicode string.
+ *
+ * @param base64String The string to decode
+ * @throws SentryError (because using the logger creates a circular dependency)
+ * @returns A Unicode string
+ */
+export function base64ToUnicode(base64String: string): string {
+  const globalObject = getGlobalObject();
+
+  // we cast to a string just in case we're given something else
+  const stringifiedInput = String(base64String);
+  const errMsg = `Unable to convert from base64: ${
+    stringifiedInput.length > 256 ? `${stringifiedInput.slice(0, 256)}...` : stringifiedInput
+  }`;
+
+  // To account for the fact that different platforms use different character encodings natively, our `tracestate` spec
+  // calls for all jsonified data to be encoded in UTF-8 bytes before being passed to the base64 encoder. So to reverse
+  // the process, decode from base64 to bytes, then feed those bytes to a UTF-8 decoder.
+  try {
+    // browser
+    if ('atob' in globalObject) {
+      // `atob` returns a string rather than bytes, so we first need to encode using the native encoding (UTF-16)
+      const bytesAsString = atob(base64String);
+      const bytes = [...bytesAsString].map(char => char.charCodeAt(0));
+
+      // decode using UTF-8 (cast the `bytes` arry to a Uint8Array just because that's the format `decode()` expects)
+      return new TextDecoder().decode(Uint8Array.from(bytes));
+    }
+
+    // Node
+    if ('Buffer' in globalObject) {
+      // unlike the browser, Node can go straight from base64 to bytes
+      const bytes = Buffer.from(base64String, 'base64');
+
+      // decode using UTF-8
+      return bytes.toString('utf-8');
+    }
+  } catch (err) {
+    throw new SentryError(`${errMsg} Got error: ${err}`);
+  }
+
+  // we shouldn't ever get here, because one of `atob` and `Buffer` should exist, but just in case...
   throw new SentryError(errMsg);
 }
