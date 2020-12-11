@@ -2,10 +2,6 @@ import { getGlobalObject } from './compat';
 import { SentryError } from './error';
 import { isRegExp, isString } from './is';
 
-// credit to https://rgxdb.com/; see https://tools.ietf.org/html/rfc4648#section-4 for base64 spec
-// eslint-disable-next-line no-useless-escape
-export const BASE64_REGEX = /^(?:[a-zA-Z0-9+\/]{4})*(?:|(?:[a-zA-Z0-9+\/]{3}=)|(?:[a-zA-Z0-9+\/]{2}==)|(?:[a-zA-Z0-9+\/]{1}===))$/;
-
 /**
  * Truncates given string to the maximum characters count
  *

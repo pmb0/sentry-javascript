@@ -260,7 +260,7 @@ export class Span implements SpanInterface {
     let headers;
     const traceparent = this.toTraceparent();
     // tracestates live on the transaction, so if this is a free-floating span, there won't be one
-    const tracestate = this.transaction?.tracestate;
+    const tracestate = this.transaction && `sentry=${this.transaction.tracestate}`;
 
     if (format === 'array') {
       // headers = [['sentry-trace', traceparent], ...(tracestate && [['tracestate', tracestate]])];

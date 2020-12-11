@@ -13,6 +13,14 @@ import {
 import { addExtensionMethods } from '../../src/hubextensions';
 import * as tracingUtils from '../../src/utils';
 
+// This is a normal base64 regex, modified to reflect that fact that we strip the trailing = or == off
+const BASE64_MISSING_EQUALS = '([a-zA-Z0-9+/]{4})*(|[a-zA-Z0-9+/]{2,3})';
+
+const TRACESTATE_HEADER_REGEX = new RegExp(
+  `sentry=(${BASE64_MISSING_EQUALS})` +  // our part of the header - should be the only part or at least the first part
+    `(,\\w+=\\w+)*`, // any number of copies of a comma followed by `name=value`
+);
+
 beforeAll(() => {
   addExtensionMethods();
   // @ts-ignore need to override global Request because it's not in the jest environment (even with an
@@ -235,7 +243,7 @@ describe('callbacks', () => {
         'sentry-trace',
         expect.stringMatching(tracingUtils.TRACEPARENT_REGEXP),
       );
-      expect(setRequestHeader).toHaveBeenCalledWith('tracestate', expect.any(String));
+      expect(setRequestHeader).toHaveBeenCalledWith('tracestate', expect.stringMatching(TRACESTATE_HEADER_REGEX));
     });
 
     it('creates and finishes XHR span on active transaction', () => {

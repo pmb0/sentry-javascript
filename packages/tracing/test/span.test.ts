@@ -118,7 +118,7 @@ describe('Span', () => {
       const headers = span.getTraceHeaders('object') as TraceHeadersObj;
 
       expect(headers['sentry-trace']).toEqual(span.toTraceparent());
-      expect(headers.tracestate).toEqual(transaction.tracestate);
+      expect(headers.tracestate).toEqual(`sentry=${transaction.tracestate}`);
     });
 
     it('returns the same data either as an object or an array', () => {

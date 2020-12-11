@@ -1,4 +1,8 @@
-import { BASE64_REGEX, base64ToUnicode, isMatchingPattern, truncate, unicodeToBase64 } from '../src/string';
+import { base64ToUnicode, isMatchingPattern, truncate, unicodeToBase64 } from '../src/string';
+
+// See https://tools.ietf.org/html/rfc4648#section-4 for base64 spec
+// eslint-disable-next-line no-useless-escape
+const BASE64_REGEX = /([a-zA-Z0-9+/]{4})*(|([a-zA-Z0-9+/]{3}=)|([a-zA-Z0-9+/]{2}==))/;
 
 describe('truncate()', () => {
   test('it works as expected', () => {
