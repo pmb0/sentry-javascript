@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/unbound-method */
-import { BrowserClient } from '@sentry/browser';
-import { getMainCarrier, Hub } from '@sentry/hub';
+import { BrowserClient, init as initSDK } from '@sentry/browser';
+import { getCurrentHub, getMainCarrier, Hub } from '@sentry/hub';
 import * as hubModule from '@sentry/hub';
 import * as utilsModule from '@sentry/utils'; // for mocking
 import { computeTracestate, getGlobalObject, isNodeEnv, logger } from '@sentry/utils';
@@ -60,6 +60,24 @@ describe('Hub', () => {
       const b64Value = computeTracestate({
         trace_id: transaction.traceId,
         environment,
+        release,
+        public_key: 'dogsarebadatkeepingsecrets',
+      });
+
+      expect(transaction.tracestate).toEqual(b64Value);
+    });
+
+    it('uses default environment if none given', () => {
+      const release = 'off.leash.park';
+      initSDK({
+        dsn: 'https://dogsarebadatkeepingsecrets@squirrelchasers.ingest.sentry.io/12312012',
+        release,
+      });
+      const transaction = getCurrentHub().startTransaction({ name: 'FETCH /ball' });
+
+      const b64Value = computeTracestate({
+        trace_id: transaction.traceId,
+        environment: 'production',
         release,
         public_key: 'dogsarebadatkeepingsecrets',
       });
