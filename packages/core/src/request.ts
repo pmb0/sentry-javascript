@@ -60,21 +60,25 @@ export function transactionToSentryRequest(event: Event, api: API): SentryReques
   const itemHeaders = JSON.stringify({
     type: event.type,
 
-    // TODO: Right now, sampleRate won't be defined in the cases of inheritance and explicitly-set sampling decisions.
+    // TODO: Right now, sampleRate will be undefined in the cases of inheritance and explicitly-set sampling decisions.
     sample_rates: [{ id: samplingMethod, rate: sampleRate }],
 
-    // The content-type is assumed to be 'application/json' and not part of
-    // the current spec for transaction items, so we don't bloat the request
-    // body with it.
+    // Note: `content_type` and `length` were left out on purpose. Here's a quick explanation of why, along with the
+    // value to use if we ever decide to put them back in.
     //
+    // `content_type`:
+    // Assumed to be 'application/json' and not part of the current spec for transaction items. No point in bloating the
+    // request body with it.
+    //
+    // would be:
     // content_type: 'application/json',
     //
-    // The length is optional. It must be the number of bytes in req.Body
-    // encoded as UTF-8. Since the server can figure this out and would
-    // otherwise refuse events that report the length incorrectly, we decided
-    // not to send the length to avoid problems related to reporting the wrong
-    // size and to reduce request body size.
+    // `length`:
+    // Optional and equal to the number of bytes in req.Body encoded as UTF-8. Since the server can figure this out and
+    // would otherwise refuse events that report the length incorrectly, we decided not to send the length to avoid
+    // problems related to reporting the wrong size and to reduce request body size.
     //
+    // would be:
     // length: new TextEncoder().encode(req.body).length,
   });
 
