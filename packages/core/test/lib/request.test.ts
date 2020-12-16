@@ -18,7 +18,6 @@ describe('eventToSentryRequest', () => {
     environment,
     release,
     contexts: { trace: { trace_id: trace_id, span_id: '12261980', op: 'ball.fetch' } },
-    // TODO
     user: { id: '1121', username: 'CharlieDog', ip_address: '11.21.20.12' },
   };
 
@@ -40,7 +39,7 @@ describe('eventToSentryRequest', () => {
     tags: {
       dog: 'Charlie',
       __sentry_samplingMethod: TransactionSamplingMethod.Rate,
-      __sentry_sampleRate: '.1121',
+      __sentry_sampleRate: 0.1121,
       __sentry_tracestate: computeTracestate(tracestateObject),
     },
     transaction: '/dogs/are/great/',
@@ -90,15 +89,14 @@ describe('eventToSentryRequest', () => {
   });
 
   [
-    // TODO kmclb - once tag types are loosened, don't need to cast rate and undefined to strings here
-    { __sentry_samplingMethod: TransactionSamplingMethod.Rate, __sentry_sampleRate: '0.1121', dog: 'Charlie' },
-    { __sentry_samplingMethod: TransactionSamplingMethod.Sampler, __sentry_sampleRate: '0.1231', dog: 'Maisey' },
-    { __sentry_samplingMethod: TransactionSamplingMethod.Inheritance, __sentry_sampleRate: '', dog: 'Cory' },
-    { __sentry_samplingMethod: TransactionSamplingMethod.Explicit, __sentry_sampleRate: '', dog: 'Bodhi' },
+    { __sentry_samplingMethod: TransactionSamplingMethod.Rate, __sentry_sampleRate: 0.1121, dog: 'Charlie' },
+    { __sentry_samplingMethod: TransactionSamplingMethod.Sampler, __sentry_sampleRate: 0.1231, dog: 'Maisey' },
+    { __sentry_samplingMethod: TransactionSamplingMethod.Inheritance, dog: 'Cory' },
+    { __sentry_samplingMethod: TransactionSamplingMethod.Explicit, dog: 'Bodhi' },
 
     // this shouldn't ever happen (tags should always include at least the sampling method), but good to know that
     // things won't blow up if it does happen
-    { __sentry_samplingMethod: '', __sentry_sampleRate: '', dog: 'Lucy' },
+    { dog: 'Lucy' },
   ].forEach(tags => {
     const { __sentry_samplingMethod: method, __sentry_sampleRate: rate, dog } = tags;
 
@@ -115,8 +113,7 @@ describe('eventToSentryRequest', () => {
 
       expect(itemHeader).toEqual({
         type: 'transaction',
-        // TODO kmclb - once tag types are loosened, don't need to cast to string here
-        sample_rates: [{ id: String(method), rate: String(rate) }],
+        sample_rates: [{ id: method, rate }],
       });
     });
   });

@@ -325,7 +325,7 @@ describe('Hub', () => {
         const transaction = hub.startTransaction({ name: 'dogpark' });
 
         expect(transaction.tags).toEqual(
-          expect.objectContaining({ __sentry_samplingMethod: 'client_sampler', __sentry_sampleRate: '0.1121' }),
+          expect.objectContaining({ __sentry_samplingMethod: 'client_sampler', __sentry_sampleRate: 0.1121 }),
         );
       });
 
@@ -341,7 +341,7 @@ describe('Hub', () => {
         const transaction = hub.startTransaction({ name: 'dogpark' });
 
         expect(transaction.tags).toEqual(
-          expect.objectContaining({ __sentry_samplingMethod: 'client_rate', __sentry_sampleRate: '0.1121' }),
+          expect.objectContaining({ __sentry_samplingMethod: 'client_rate', __sentry_sampleRate: 0.1121 }),
         );
       });
     });

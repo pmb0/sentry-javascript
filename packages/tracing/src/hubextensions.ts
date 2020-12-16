@@ -65,8 +65,7 @@ function sample<T extends Transaction>(hub: Hub, transaction: T, samplingContext
     transaction.tags = {
       ...transaction.tags,
       __sentry_samplingMethod: TransactionSamplingMethod.Sampler,
-      // TODO kmclb - once tag types are loosened, don't need to cast to string here
-      __sentry_sampleRate: String(Number(sampleRate)),
+      __sentry_sampleRate: Number(sampleRate),
     };
   } else if (samplingContext.parentSampled !== undefined) {
     sampleRate = samplingContext.parentSampled;
@@ -77,8 +76,7 @@ function sample<T extends Transaction>(hub: Hub, transaction: T, samplingContext
     transaction.tags = {
       ...transaction.tags,
       __sentry_samplingMethod: TransactionSamplingMethod.Rate,
-      // TODO kmclb - once tag types are loosened, don't need to cast to string here
-      __sentry_sampleRate: String(Number(sampleRate)),
+      __sentry_sampleRate: Number(sampleRate),
     };
   }
 
