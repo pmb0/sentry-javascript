@@ -42,7 +42,6 @@ export interface Event {
   type?: EventType;
   spans?: Span[];
   measurements?: Measurements;
-  tracestate?: string;
 }
 
 /** JSDoc */

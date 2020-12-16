@@ -33,26 +33,28 @@ export function eventToSentryRequest(event: Event, api: API): SentryRequest {
  * @returns SentryRequest in envelope form
  */
 export function transactionToSentryRequest(event: Event, api: API): SentryRequest {
-  // since JS has no Object.prototype.pop()
-  const { __sentry_samplingMethod: samplingMethod, __sentry_sampleRate: sampleRate, ...otherTags } = event.tags || {};
+  // pull our temporary values out of the tags, so they don't get sent to Sentry
+  const {
+    __sentry_samplingMethod: samplingMethod,
+    __sentry_sampleRate: sampleRate,
+    __sentry_tracestate: encodedTracestate,
+    ...otherTags
+  } = event.tags || {};
   event.tags = otherTags;
 
-  let tracestate = {};
-  if (event.tracestate) {
-    try {
-      // the tracestate is stored in bas64-encoded JSON, but envelope header values are expected to be full JS values,
-      // so we have to decode and reinflate it
-      tracestate = JSON.parse(base64ToUnicode(event.tracestate));
-    } catch (err) {
-      logger.warn(err);
-    }
+  // the tracestate is stored in bas64-encoded JSON, but envelope header values are expected to be full JS values,
+  // so we have to decode and reinflate it
+  let tracestate;
+  try {
+    tracestate = JSON.parse(base64ToUnicode(encodedTracestate as string));
+  } catch (err) {
+    logger.warn(err);
   }
-  delete event.tracestate;
 
   const envelopeHeaders = JSON.stringify({
     event_id: event.event_id,
     sent_at: new Date().toISOString(),
-    trace: tracestate, // trace context for dynamic sampling on relay
+    ...(tracestate && { trace: tracestate }), // trace context for dynamic sampling on relay
   });
 
   const itemHeaders = JSON.stringify({

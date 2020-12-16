@@ -103,6 +103,8 @@ export class Transaction extends SpanClass implements TransactionInterface {
       }).endTimestamp;
     }
 
+    this.tags.__sentry_tracestate = this.tracestate;
+
     const transactionEvent: Event = {
       contexts: {
         trace: this.getTraceContext(),
@@ -111,7 +113,6 @@ export class Transaction extends SpanClass implements TransactionInterface {
       start_timestamp: this.startTimestamp,
       tags: this.tags,
       timestamp: this.endTimestamp,
-      tracestate: this.tracestate,
       transaction: this.name,
       type: 'transaction',
     };
@@ -122,8 +123,6 @@ export class Transaction extends SpanClass implements TransactionInterface {
       logger.log('[Measurements] Adding measurements to transaction', JSON.stringify(this._measurements, undefined, 2));
       transactionEvent.measurements = this._measurements;
     }
-
-    transactionEvent.tracestate = this.tracestate;
 
     return this._hub.captureEvent(transactionEvent);
   }
