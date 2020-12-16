@@ -5,26 +5,53 @@ import { API } from '../../src/api';
 import { eventToSentryRequest } from '../../src/request';
 
 describe('eventToSentryRequest', () => {
-  const api = new API('https://dogsarebadatkeepingsecrets@squirrelchasers.ingest.sentry.io/12312012');
-  const event: Event = {
-    contexts: { trace: { trace_id: '1231201211212012', span_id: '12261980', op: 'pageload' } },
-    environment: 'dogpark',
-    event_id: '0908201304152013',
-    release: 'off.leash.park',
-    spans: [],
-    transaction: '/dogs/are/great/',
-    type: 'transaction',
+  const public_key = 'dogsarebadatkeepingsecrets';
+  const api = new API(`https://${public_key}@squirrelchasers.ingest.sentry.io/12312012`);
+
+  const event_id = '1231201211212012';
+  const trace_id = '0908201304152013';
+  const environment = 'dogpark';
+  const release = 'off.leash.park';
+
+  const baseEvent: Event = {
+    event_id,
+    environment,
+    release,
+    contexts: { trace: { trace_id: trace_id, span_id: '12261980', op: 'ball.fetch' } },
+    // TODO
     user: { id: '1121', username: 'CharlieDog', ip_address: '11.21.20.12' },
   };
 
+  const errorEvent: Event = {
+    ...baseEvent,
+    exception: { values: [{ type: 'PuppyProblemsError', value: 'Charlie ate the flip-flops :-(' }] },
+  };
+
+  const tracestateObject = {
+    trace_id,
+    environment,
+    release,
+    public_key,
+  };
+
+  const transactionEvent: Event = {
+    ...baseEvent,
+    spans: [],
+    tags: {
+      dog: 'Charlie',
+      __sentry_samplingMethod: TransactionSamplingMethod.Rate,
+      __sentry_sampleRate: '.1121',
+      __sentry_tracestate: computeTracestate(tracestateObject),
+    },
+    transaction: '/dogs/are/great/',
+    type: 'transaction',
+  };
+
   it('injects correct data for error/message events', () => {
-    const event = {
-      event_id: '1231201211212012',
-      exception: { values: [{ type: 'PuppyProblemsError', value: 'Charlie ate the flip-flops :-(' }] },
-      user: { id: '1121', username: 'CharlieDog', ip_address: '11.21.20.12' },
-    };
+    const event = { ...errorEvent };
 
     const result = eventToSentryRequest(event, api);
+
     expect(result.type).toEqual('event');
     expect(result.url).toEqual(
       'https://squirrelchasers.ingest.sentry.io/api/12312012/store/?sentry_key=dogsarebadatkeepingsecrets&sentry_version=7',
@@ -33,29 +60,9 @@ describe('eventToSentryRequest', () => {
   });
 
   it('injects correct data for transaction events', () => {
-    const eventId = '1231201211212012';
-    const traceId = '0908201304152013';
-    const environment = 'dogpark';
-    const release = 'off.leash.park';
+    const event = { ...transactionEvent };
 
-    const event = {
-      contexts: { trace: { trace_id: traceId, span_id: '12261980', op: 'pageload' } },
-      environment,
-      event_id: eventId,
-      release,
-      spans: [],
-      transaction: '/dogs/are/great/',
-      tracestate: computeTracestate({
-        trace_id: traceId,
-        environment,
-        public_key: 'dogsarebadatkeepingsecrets',
-        release,
-      }),
-      type: 'transaction',
-      user: { id: '1121', username: 'CharlieDog', ip_address: '11.21.20.12' },
-    };
-
-    const result = eventToSentryRequest(event as Event, api);
+    const result = eventToSentryRequest(event, api);
 
     const [envelopeHeaderString, itemHeaderString, eventString] = result.body.split('\n');
 
@@ -71,14 +78,9 @@ describe('eventToSentryRequest', () => {
     );
 
     expect(envelope.envelopeHeader).toEqual({
-      event_id: eventId,
+      event_id,
       sent_at: expect.any(String),
-      trace: {
-        trace_id: traceId,
-        environment,
-        public_key: 'dogsarebadatkeepingsecrets',
-        release,
-      },
+      trace: tracestateObject,
     });
     expect(envelope.itemHeader).toEqual({
       type: 'transaction',
@@ -88,40 +90,47 @@ describe('eventToSentryRequest', () => {
   });
 
   [
-    { method: TransactionSamplingMethod.Rate, rate: '0.1121', dog: 'Charlie' },
-    { method: TransactionSamplingMethod.Sampler, rate: '0.1231', dog: 'Maisey' },
-    { method: TransactionSamplingMethod.Inheritance, dog: 'Cory' },
-    { method: TransactionSamplingMethod.Explicit, dog: 'Bodhi' },
+    // TODO kmclb - once tag types are loosened, don't need to cast rate and undefined to strings here
+    { __sentry_samplingMethod: TransactionSamplingMethod.Rate, __sentry_sampleRate: '0.1121', dog: 'Charlie' },
+    { __sentry_samplingMethod: TransactionSamplingMethod.Sampler, __sentry_sampleRate: '0.1231', dog: 'Maisey' },
+    { __sentry_samplingMethod: TransactionSamplingMethod.Inheritance, __sentry_sampleRate: '', dog: 'Cory' },
+    { __sentry_samplingMethod: TransactionSamplingMethod.Explicit, __sentry_sampleRate: '', dog: 'Bodhi' },
 
     // this shouldn't ever happen (tags should always include at least the sampling method), but good to know that
     // things won't blow up if it does happen
-    { dog: 'Lucy' },
-  ].forEach(({ method, rate, dog }) => {
+    { __sentry_samplingMethod: '', __sentry_sampleRate: '', dog: 'Lucy' },
+  ].forEach(tags => {
+    const { __sentry_samplingMethod: method, __sentry_sampleRate: rate, dog } = tags;
+
     it(`adds transaction sampling information to item header - ${method}, ${rate}, ${dog}`, () => {
-      // TODO kmclb - once tag types are loosened, don't need to cast to string here
-      event.tags = { __sentry_samplingMethod: String(method), __sentry_sampleRate: String(rate), dog };
-
-      const result = eventToSentryRequest(event as Event, api);
-
-      const [envelopeHeaderString, itemHeaderString, eventString] = result.body.split('\n');
-
-      const envelope = {
-        envelopeHeader: JSON.parse(envelopeHeaderString),
-        itemHeader: JSON.parse(itemHeaderString),
-        event: JSON.parse(eventString),
+      const event = {
+        ...transactionEvent,
+        tags,
       };
 
-      // the right stuff is added to the item header
-      expect(envelope.itemHeader).toEqual({
+      const result = eventToSentryRequest(event, api);
+
+      const itemHeaderJSON = result.body.split('\n')[1];
+      const itemHeader = JSON.parse(itemHeaderJSON);
+
+      expect(itemHeader).toEqual({
         type: 'transaction',
         // TODO kmclb - once tag types are loosened, don't need to cast to string here
         sample_rates: [{ id: String(method), rate: String(rate) }],
       });
-
-      // show that it pops the right tags and leaves the rest alone
-      expect('__sentry_samplingMethod' in envelope.event.tags).toBe(false);
-      expect('__sentry_sampleRate' in envelope.event.tags).toBe(false);
-      expect('dog' in envelope.event.tags).toBe(true);
     });
+  });
+
+  it('filters out temporary tags before sending (but leaves other tags alone)', () => {
+    const event = { ...transactionEvent };
+
+    const result = eventToSentryRequest(event, api);
+
+    const eventString = result.body.split('\n')[2];
+    const envelopeEvent = JSON.parse(eventString);
+    const internalTags = Object.keys(envelopeEvent.tags).filter(tagName => tagName.startsWith('__sentry'));
+
+    expect(internalTags).toEqual([]);
+    expect('dog' in envelopeEvent.tags).toBe(true);
   });
 });
