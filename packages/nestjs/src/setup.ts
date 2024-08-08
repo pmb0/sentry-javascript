@@ -1,6 +1,7 @@
 import type {
   ArgumentsHost,
   CallHandler,
+  ContextType,
   DynamicModule,
   ExecutionContext,
   NestInterceptor,
@@ -70,6 +71,16 @@ class SentryGlobalFilter extends BaseExceptionFilter {
    * Catches exceptions and reports them to Sentry unless they are expected errors.
    */
   public catch(exception: unknown, host: ArgumentsHost): void {
+    // The BaseExceptionFilter is not compatible with GraphQL, so we need to
+    // handle it separately. See https://github.com/nestjs/nest/pull/5972#issuecomment-790416456
+    //
+    // `GqlContextType` is only available if @nestjs/graphql is installed.
+    // See https://github.com/nestjs/graphql/blob/master/packages/graphql/lib/services/gql-execution-context.ts#L6
+    if (host.getType<'graphql' | ContextType>() === 'graphql') {
+      captureException(exception);
+      throw exception;
+    }
+
     // don't report expected errors
     if (exception instanceof HttpException || exception instanceof RpcException) {
       return super.catch(exception, host);
